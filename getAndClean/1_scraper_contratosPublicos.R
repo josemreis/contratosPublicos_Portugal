@@ -66,7 +66,7 @@ static_url1 <- "http://www.base.gov.pt/Base/pt/ResultadosPesquisa?range="
 static_url2 <- "&type=contratos&query=texto%3D%26tipo%3D0%26tipocontrato%3D0%26cpv%3D%26numeroanuncio%3D%26aqinfo%3D%26adjudicante%3D%26adjudicataria%3D%26desdeprecocontrato_false%3D%26desdeprecocontrato%3D%26ateprecocontrato_false%3D%26ateprecocontrato%3D%26desdedatacontrato%3D%26atedatacontrato%3D%26desdedatapublicacao%3D%26atedatapublicacao%3D%26desdeprazoexecucao%3D%26ateprazoexecucao%3D%26desdedatafecho%3D%26atedatafecho%3D%26desdeprecoefectivo_false%3D%26desdeprecoefectivo%3D%26ateprecoefectivo_false%3D%26ateprecoefectivo%3D%26pais%3D0%26distrito%3D0%26concelho%3D0&ordering=sort%28-publicationDate%29"
 
 ### Run the scraper
-concluded_contracts_raw <- map_df(1:(length(pair_sequence) - 1), function(pair_id){
+cc_metadata <- map(1:(length(pair_sequence) - 1), function(pair_id){
   
   ## set the url
   # row ranges
@@ -111,6 +111,14 @@ concluded_contracts_raw <- map_df(1:(length(pair_sequence) - 1), function(pair_i
                                 html_attr("href") %>%
                                 unique()),
                      silent = TRUE)
+  
+  ## remove mistaken ones..
+  if(class(query_table) == "try-error"){
+    
+    query_table <- NULL
+    
+    
+  }
 
   print(sample_n(query_table, 3))  
   
@@ -122,8 +130,8 @@ concluded_contracts_raw <- map_df(1:(length(pair_sequence) - 1), function(pair_i
 })
 
 ### export it
-save(concluded_contracts_raw,
+save(cc_metadata,
      file = "interm_data/concluded_contracts_raw.Rdata")
 
-write.csv(concluded_contracts_raw,
+write.csv(cc_metadata,
      file = "interm_data/concluded_contracts_raw.csv")
