@@ -120,10 +120,10 @@ cc_metadata <- map(1:(length(pair_sequence) - 1), function(pair_id){
     
   }
 
-  print(sample_n(query_table, 3))  
+  print(query_table)  
   
   ## rest time
-  Sys.sleep(sample(1:5, 1))
+  Sys.sleep(sample(1:5, 1)) 
   
   return(query_table)
   
