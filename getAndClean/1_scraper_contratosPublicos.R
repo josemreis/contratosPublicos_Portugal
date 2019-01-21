@@ -60,7 +60,6 @@ N <- baseline_url %>%
 ## Generate the sequence of rows
 pair_sequence <- maxGroupSeq(N, 1200)
 
-
 #### the scraper
 ## set the urls
 static_url1 <- "http://www.base.gov.pt/Base/pt/ResultadosPesquisa?range="
@@ -99,7 +98,7 @@ concluded_contracts_raw <- map_df(1:(length(pair_sequence) - 1), function(pair_i
   ## pull the table
   query_table <- try(parsed_sub_page %>%
                        html_node(xpath = "//table[@id = 'resultadosContractos']") %>%
-                       html_table() %>%
+                       html_table(fill = TRUE) %>%
                        as.data.frame() %>%
                        select(-ncol(.)) %>%
                        set_names(names(.) %>%
