@@ -18,6 +18,3 @@ maxGroupSeq <- function(N, group_n = 30){
   
   return(result)
 }
-
-
-maxGroupSeq(969273, 1000)

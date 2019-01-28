@@ -21,6 +21,7 @@ library(tidyverse)
 library(rvest)
 library(openxlsx)
 library(lubridate)
+library(data.table)
 
 ### Create a data directory
 if(!dir.exists("data")){
@@ -129,9 +130,207 @@ cc_metadata <- map_df(1:(length(pair_sequence) - 1), function(pair_id){
   
 })
 
+### add an id variable. use the id's found in the URL.
+cc_metadata$id <- str_extract(cc_metadata$contrato_pagina, "(?<=a\\=).*$")
+
 ### export it
 save(cc_metadata,
      file = "interm_data/concluded_contracts_raw.Rdata")
 
 write.csv(cc_metadata,
      file = "interm_data/concluded_contracts_raw.csv")
+
+
+#### scrape the contract details-----------------------------------------------
+
+## generate a contract_repo 
+if(!dir.exists("interm_data/contract_repo")){
+  
+  dir.create("interm_data/contract_repo")
+  
+}
+
+### We repeat the steps above, but now using the "contrato_pagina" urls
+map2(cc_metadata$id, cc_metadata$contrato_pagina, function(id, page){
+  
+  ## start
+  cat(paste0("scraping contract ", id,"\n\n"))
+  
+  ### check if the dataset was already scraped
+  # generate the file_name
+  file_name <- paste0("interm_data/contract_repo/",
+                  id,
+                  ".csv")
+  
+  if(!file.exists(file_name)){
+  ### Parsing the contract page
+  # check the internet conection, and wait if it is weak. If not, just parse the HTML page
+  con_test <- try(parsed_sub_page <- page %>%
+                    read_html(), silent = TRUE)
+  
+  # if true, weak connection...wait 1 minute, and then reconnect and parse the HTML page
+  if(class(con_test) == "try-error") {
+    
+    print("reconecting in 1 minute!")
+    Sys.sleep(60)
+    parsed_sub_page <- page %>%
+      read_html()
+    
+  }
+  
+  ### scrape the table
+  tables <- try(parsed_sub_page %>%
+    html_nodes(xpath = "//table") %>%
+    html_table() %>%
+    map(., function(tab){
+      
+      res <- tab %>% 
+        t() %>%
+        as_tibble() %>% 
+        set_names(., 
+                  nm = .[1,] %>% 
+                    str_replace_all(., "[[:punct:]]|º|\\(.*?\\)", "") %>% 
+                    str_to_lower() %>% 
+                    str_replace_all(., "\\s+", "_")) %>% 
+        slice(-1) %>%
+        mutate(matcher = row_number(),
+               id = id,
+               contrato_pagina = page)
+      
+      return(res)
+      
+    }),
+    silent = FALSE)
+  
+  ## remove mistaken ones..
+  if(class(tables) == "try-error"){
+    
+    tables <- NULL
+    
+  }
+  
+  ## if more than one table, left_join them
+  
+  if(length(tables) > 1){
+    
+    new_tab <- tables[[1]]
+    
+    for(i in seq_len(length(tables) - 1)){
+      
+      new_tab <- left_join(new_tab, tables[[i+1]])
+      
+    }
+    
+    contract_table <- new_tab %>%
+      select(-matcher) 
+    
+  } else {
+    
+    contract_table <- unlist(tables) %>%
+      select(-matcher)  
+    
+  }
+  
+  ### Add a couple of relevant other variables and urls
+  
+  ## pagina do adjudicante
+  url_adjudicante <- parsed_sub_page %>% 
+    html_nodes(xpath = "//td[preceding-sibling::td[contains(text(), 'Entidade adjudicante')]]/a") %>%
+    html_attr("href")
+  
+  # check for emtpy strings...
+  url_adjudicante <- ifelse(is_empty(url_adjudicante) || nchar(url_adjudicante) < 2,
+                            NA_character_,
+                            url_adjudicante)
+  
+  # if more than one, assign the " <--new element--> " splitter
+  contract_table$url_adjudicante <- ifelse(str_count(url_adjudicante, "\\)") > 1,
+                                          paste(str_split(url_adjudicante, "(?<=.)(?=\\))")[[1]], collapse = " <--new element--> "),
+                                          url_adjudicante)
+  
+  
+  ## pagina do adjudicatario
+  url_adjudicatario <- parsed_sub_page %>% 
+    html_nodes(xpath = "//td[preceding-sibling::td[contains(text(), 'Entidade adjudicatária')]]/a") %>%
+    html_attr("href")
+  
+  # check for emtpy strings...
+  url_adjudicatario <- ifelse(is_empty(url_adjudicatario) || nchar(url_adjudicatario) < 2,
+                            NA_character_,
+                            url_adjudicatario)
+  
+  # if more than one, assign the " <--new element--> " splitter
+  contract_table$url_adjudicatario <- ifelse(str_count(url_adjudicatario, "\\)") > 1,
+                                          paste(str_split(url_adjudicatario, "(?<=.)(?=\\))")[[1]], collapse = " <--new element--> "),
+                                          url_adjudicatario)
+  
+  
+  ## pagina do concorrente
+  url_concorrentes <- parsed_sub_page %>% 
+    html_nodes(xpath = "//td[preceding-sibling::td[contains(text(), 'Concorrentes')]]/a") %>%
+    html_attr("href")
+  
+  # check for emtpy strings...
+  url_concorrentes <- ifelse(is_empty(url_concorrentes) || nchar(url_concorrentes) < 2,
+                              NA_character_,
+                             url_concorrentes)
+  
+  # if more than one, assign the " <--new element--> " splitter
+  contract_table$url_concorrentes <- ifelse(str_count(url_concorrentes, "\\)") > 1,
+                                            paste(str_split(url_concorrentes, "(?<=.)(?=\\))")[[1]], collapse = " <--new element--> "),
+                                            url_concorrentes)
+  
+  
+  ## pagina do documento
+  url_documentos <- parsed_sub_page %>%
+    html_nodes(xpath = "//td[preceding-sibling::td[contains(text(), 'Documentos')]]/a") %>%
+    html_attr("href")
+  
+  # check for emtpy strings...
+  url_documentos <- ifelse(is_empty(url_documentos) || nchar(url_documentos) < 2,
+                             NA_character_,
+                           url_documentos)
+  
+  # if more than one, assign the " <--new element--> " splitter
+  contract_table$url_documentos <- ifelse(str_count(url_documentos, "\\)") > 1,
+                                          paste(str_split(url_documentos, "(?<=.)(?=\\))")[[1]], collapse = " <--new element--> "),
+                                          url_documentos)
+  
+  
+  ## pagina do anuncio
+  url_anuncios <- parsed_sub_page %>% 
+    html_nodes(xpath = "//td[preceding-sibling::td[contains(text(), 'Anúncio')]]/a") %>%
+    html_attr("href")
+  
+  # check for emtpy strings...
+  url_anuncios <- ifelse(is_empty(url_anuncios) || nchar(url_anuncios) < 2,
+                           NA_character_,
+                         url_anuncios)
+  
+  # if more than one, assign the " <--new element--> " splitter
+  contract_table$url_anuncios <- ifelse(str_count(url_anuncios, "\\)") > 1,
+                                        paste(str_split(url_anuncios, "(?<=.)(?=\\))")[[1]], collapse = " <--new element--> "),
+                                        url_anuncios)
+  
+  ## double-check
+  print(contract_table[1, sample(1:ncol(contract_table), 4)])
+  
+  ## write it
+  write.csv(contract_table,
+            file = file_name,
+            fileEncoding = "UTF-8",
+            row.names = FALSE)
+  
+  ## rest time for the server
+  Sys.sleep(sample(1:4, 1)) 
+  
+  
+  } else {
+    
+    print("Already scraped and saved!")
+    
+    
+  }
+  
+  })
+
