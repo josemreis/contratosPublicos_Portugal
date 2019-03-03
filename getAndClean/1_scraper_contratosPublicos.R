@@ -39,6 +39,7 @@ if(!dir.exists("interm_data")){
 
 ## source relevant functions
 source("helper_functions/maxGroupSeq_helperFunction.R")
+source("helper_functions/helperFunction_randomUserAgent.R")
 
 
 #### Pull the concluded contracts data---------------------------------------------------------------------
@@ -165,7 +166,7 @@ map2(cc_metadata$id, cc_metadata$contrato_pagina, function(id, page){
   if(!file.exists(file_name)){
   ### Parsing the contract page
   # check the internet conection, and wait if it is weak. If not, just parse the HTML page
-  con_test <- try(parsed_sub_page <- page %>%
+  con_test <- try(parsed_sub_page <- httr::GET(page, httr::user_agent(random_agent()$options$useragent)) %>%
                     read_html(), silent = TRUE)
   
   # if true, weak connection...wait 1 minute, and then reconnect and parse the HTML page
@@ -173,15 +174,24 @@ map2(cc_metadata$id, cc_metadata$contrato_pagina, function(id, page){
     
     print("reconecting in 1 minute!")
     Sys.sleep(60)
-    parsed_sub_page <- page %>%
-      read_html()
+    con_test2 <- try(parsed_sub_page <- httr::GET(page, httr::user_agent(random_agent()$options$useragent)) %>%
+      read_html(), 
+      silent = TRUE)
     
   }
   
+  if(class(con_test) != "try-error" || (exists("con_test2") & class(con_test2) != "try-error")){
+  
+  ### check if the table exists
+  tab <- try(parsed_sub_page %>%
+               html_nodes(xpath = "//table") %>%
+               html_table(),
+             silent = TRUE)
+  
+  if(class(tab) != "try-error" & length(tab) > 0){
+  
   ### scrape the table
-  tables <- try(parsed_sub_page %>%
-    html_nodes(xpath = "//table") %>%
-    html_table() %>%
+  tables <- try(tab %>%
     map(., function(tab){
       
       res <- tab %>% 
@@ -322,15 +332,27 @@ map2(cc_metadata$id, cc_metadata$contrato_pagina, function(id, page){
             row.names = FALSE)
   
   ## rest time for the server
-  Sys.sleep(sample(1:4, 1)) 
+  Sys.sleep(sample(1:6, 1)) 
   
+      } else {
+    
+        cat("\nno metadata table!\n")  
+    
+    }
+  
+     } else {
+    
+      cat("\nno website or website down!\n")
+    
+   }
   
   } else {
     
-    print("Already scraped and saved!")
+    cat("\nAlready scraped and saved!\n")
     
     
   }
   
   })
+
 
