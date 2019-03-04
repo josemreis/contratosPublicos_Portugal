@@ -42,5 +42,5 @@ combined_df <- rbindlist(df_list2) %>%
 
 ### Export as .csv
 write.csv(combined_df,
-          file = paste0("data/1_",str_extract(Sys.time(), "^.*?(?=\\s)"), "_cpCombinedRaw.RD"),
+          file = paste0("data/1_",str_extract(Sys.time(), "^.*?(?=\\s)"), "_contratosPub_CombinedRaw.RD"),
           encoding = "UTF-8")
