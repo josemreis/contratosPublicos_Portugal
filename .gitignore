@@ -2,8 +2,6 @@
 .Rhistory
 .RData
 .Ruserdata
-getAndClean/data
-getAndClean/interm_data
 getAndClean/counterScraper_contratosPublicos.R
 getAndClean/midBottomScraper_contratosPublicos.R
 getAndClean/midCeillingScraper_contratosPublicos.R
